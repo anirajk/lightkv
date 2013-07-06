@@ -17,5 +17,10 @@ sqlite3.o: $(SQLITE_SRC)/sqlite3.c $(SQLITE_SRC)/sqlite3.h
 sqlite-objects.o: helpers/sqlite-objects.cc helpers/sqlite-objects.hh
 	g++ $(FLAGS) -c $<
 
+
+sqlite_bench:
+	gcc -lsqlite3 -o sqlite_bench benchmark.c
+
+
 clean:
-	rm -f *.o driver
+	rm -f *.o driver sqlite_bench /tmp/db_test
