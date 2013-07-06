@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include "sqlite3.h"
 #include <stdlib.h>
+#include <ctype.h>
+#include <unistd.h>
+
 static int callback(void *NotUsed, int argc, char **argv, char **azColName){
   int i;
   for(i=0; i<argc; i++){
@@ -11,13 +14,49 @@ static int callback(void *NotUsed, int argc, char **argv, char **azColName){
   return 0;
 }
 
-int main(){
+int main(int argc, char **argv ){
   sqlite3 *db;
-  char *zErrMsg = 0;
-  int rc, i;
-  clock_t t;
+  char *zErrMsg = 0, *num_ops  = NULL;
+  char cmd[1024], value[] = "value", new_value[] = "new_value";
+  int rc, i, c, insert = 0, update = 0, select = 0, ops=0;
+  struct timeval tv;
+  long int ts,tn;
+  while ((c = getopt (argc, argv, "iusn:")) != -1) {
+      switch (c) {
+          case 'i':
+            insert = 1;
+            break;
+          case 'u':
+            update = 1;
+            break;
+          case 's':
+            select = 1;
+            break;
+          case 'n':
+            num_ops = optarg;
+            ops = atoi(num_ops);
+            break;
+          case '?':
+            if (optopt == 'n')
+                fprintf (stderr, "Option -%c requires an argument.\n", optopt);
+            else if (isprint (optopt))
+                fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+            else
+                fprintf (stderr, "Unknown option character `\\x%x'.\n", optopt);
+            return 1;
+          default:
+            abort();
+      }
+  }
 
-  rc = sqlite3_open("/tmp/db_test", &db);
+ for (i = optind; i < argc; i++) {
+     printf ("Non-option argument %s\n", argv[i]);
+     printf ("Usage: %c -i<inserts/optional> -u<updates optional> -s<selects optional> -n <number_of_ops/required>",argv[0]);
+     return 1;
+ }
+
+
+ rc = sqlite3_open("/tmp/db_test", &db);
   if( rc ){
     fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
     sqlite3_close(db);
@@ -36,27 +75,30 @@ int main(){
 
   #define TIME(msg) \
     { \
-      printf(msg " : took %d ms\n", (1000*(clock()-t))/CLOCKS_PER_SEC); \
-      t = clock(); \
+      gettimeofday(&tv,NULL); \
+      tn = tv.tv_usec; \
+      printf(msg " : took %ld microsecs\n", (tn - ts)); \
+      ts = tn; \
     }
 
-  t = clock();
+
+  gettimeofday(&tv, NULL);
+  ts = tv.tv_usec;
   TIME("'startup'");
 
   RUN("CREATE TABLE kv(k INTEGER,  v VARCHAR(100));");
   TIME("create table");
 
   RUN("BEGIN;");
-
   // 25000 INSERTs in a transaction
-  for (i = 0; i < 5000; i++) {
-    RUN("INSERT INTO kv VALUES(1, 'one 1 one 1 one 1');");
-    RUN("INSERT INTO kv VALUES(2, 'two two two two');");
-    RUN("INSERT INTO kv VALUES(3, 'three three 33333333333 three');");
-    RUN("INSERT INTO kv VALUES(4, 'FOUR four 4 phor FOUR 44444');");
-    RUN("INSERT INTO kv VALUES(5, 'five 5 FIVE Five phayve 55 5 5 5 5 55  5');");
+  if(insert) {
+  for (i = 0; i < ops; i++) {
+    sprintf(cmd, "INSERT INTO kv VALUES(%d,'%s');",i,value);
+    RUN(cmd);
   }
-  TIME("25,000 inserts");
+  }
+  printf("%d",ops);
+  TIME(" inserts");
 
   RUN("COMMIT;");
   TIME("commit");
@@ -68,7 +110,7 @@ int main(){
   TIME("selects");
 
   sqlite3_close(db);
+  return 0;
 
-//  return test();
 }
 
